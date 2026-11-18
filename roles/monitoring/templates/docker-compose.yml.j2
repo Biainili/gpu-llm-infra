@@ -1,0 +1,36 @@
+---
+services:
+  node_exporter:
+    image: {{ node_exporter_image }}
+    container_name: {{ node_exporter_container_name }}
+    restart: unless-stopped
+    ports:
+      - "{{ monitoring_bind_address }}:{{ node_exporter_port }}:9100"
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+{% if has_nvidia_gpu | bool %}
+
+  dcgm_exporter:
+    image: {{ dcgm_exporter_image }}
+    container_name: {{ dcgm_exporter_container_name }}
+    restart: unless-stopped
+    ports:
+      - "{{ monitoring_bind_address }}:{{ dcgm_exporter_port }}:9400"
+    cap_add:
+      - SYS_ADMIN
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+{% endif %}

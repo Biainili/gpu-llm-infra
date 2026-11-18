@@ -1,0 +1,13 @@
+---
+galaxy_info:
+  role_name: nvidia_gpu
+  author: devops_team
+  description: NVIDIA Server drivers and NVIDIA Container Toolkit setup
+  license: MIT
+  min_ansible_version: "2.14"
+  platforms:
+    - name: Ubuntu
+      versions:
+        - jammy
+
+dependencies: []

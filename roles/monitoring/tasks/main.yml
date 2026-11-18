@@ -1,0 +1,55 @@
+---
+- name: Deploy Prometheus monitoring exporters stack
+  when: monitoring_enabled | bool
+  block:
+    - name: Ensure monitoring stack directory exists
+      ansible.builtin.file:
+        path: "{{ llm_stack_dir }}/monitoring"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Render monitoring Docker Compose configuration
+      ansible.builtin.template:
+        src: docker-compose.yml.j2
+        dest: "{{ llm_stack_dir }}/monitoring/docker-compose.yml"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart monitoring stack
+
+    - name: Start monitoring exporters via Docker Compose v2
+      community.docker.docker_compose_v2:
+        project_src: "{{ llm_stack_dir }}/monitoring"
+        state: present
+      when: not ansible_check_mode
+
+    - name: Flush handlers to apply monitoring stack changes
+      ansible.builtin.meta: flush_handlers
+
+    - name: Verify Prometheus Node Exporter metrics endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+      register: monitoring_node_metrics_check
+      until: monitoring_node_metrics_check.status == 200
+      retries: 10
+      delay: 2
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Verify NVIDIA DCGM Exporter GPU metrics endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ dcgm_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+      register: monitoring_dcgm_metrics_check
+      until: monitoring_dcgm_metrics_check.status == 200
+      retries: 10
+      delay: 3
+      changed_when: false
+      when:
+        - not ansible_check_mode
+        - has_nvidia_gpu | bool

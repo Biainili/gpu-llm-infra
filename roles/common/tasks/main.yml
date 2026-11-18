@@ -1,0 +1,64 @@
+---
+- name: Update APT cache and install base system packages
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Configure system timezone
+  community.general.timezone:
+    name: "{{ system_timezone }}"
+
+- name: Set UFW default incoming policy to deny
+  community.general.ufw:
+    direction: incoming
+    default: deny
+
+- name: Set UFW default outgoing policy to allow
+  community.general.ufw:
+    direction: outgoing
+    default: allow
+
+- name: Allow SSH access through UFW firewall
+  community.general.ufw:
+    rule: allow
+    port: "{{ ssh_port | string }}"
+    proto: tcp
+    comment: "Allow SSH management"
+
+- name: Allow HTTP API Gateway access through UFW firewall
+  community.general.ufw:
+    rule: allow
+    port: "{{ api_gateway_port | string }}"
+    proto: tcp
+    comment: "Allow LLM Nginx API Gateway"
+
+- name: Enable UFW firewall
+  community.general.ufw:
+    state: enabled
+
+- name: Inspect PCI bus for physical NVIDIA GPU controller
+  ansible.builtin.command:
+    cmd: lspci
+  register: common_lspci_output
+  changed_when: false
+  check_mode: false
+
+- name: Determine effective NVIDIA GPU availability (Hybrid GPU/CPU mode)
+  ansible.builtin.set_fact:
+    common_has_nvidia_gpu: >-
+      {{
+        true if (gpu_mode == 'enabled')
+        else (
+          false if (gpu_mode == 'disabled')
+          else ('nvidia' in (common_lspci_output.stdout | default('') | lower))
+        )
+      }}
+
+- name: Report detected execution mode
+  ansible.builtin.debug:
+    msg: >-
+      GPU Mode configuration is '{{ gpu_mode }}'.
+      Effective NVIDIA GPU active state: {{ has_nvidia_gpu | bool }}
+      ({{ 'GPU Hardware Mode' if (has_nvidia_gpu | bool) else 'CPU Fallback Mode' }}).

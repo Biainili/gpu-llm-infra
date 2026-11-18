@@ -1,0 +1,27 @@
+---
+services:
+  ollama:
+    image: {{ ollama_image }}
+    container_name: {{ ollama_container_name }}
+    restart: unless-stopped
+    ports:
+      - "{{ ollama_bind_address }}:{{ ollama_port }}:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0:11434
+      - OLLAMA_KEEP_ALIVE={{ ollama_keep_alive }}
+    volumes:
+      - ollama_data:/root/.ollama
+{% if has_nvidia_gpu | bool %}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities:
+                - gpu
+{% endif %}
+
+volumes:
+  ollama_data:
+    name: ollama_data

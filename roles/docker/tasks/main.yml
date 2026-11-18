@@ -1,0 +1,66 @@
+---
+- name: Remove conflicting or legacy container packages
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-doc
+      - docker-compose
+      - podman-docker
+      - containerd
+      - runc
+    state: absent
+
+- name: Check if Snap Docker binary is present
+  ansible.builtin.stat:
+    path: /snap/bin/docker
+  register: docker_snap_check
+
+- name: Remove Snap Docker package if installed (incompatible with nvidia-ctk)
+  community.general.snap:
+    name: docker
+    state: absent
+  when: docker_snap_check.stat.exists
+
+- name: Ensure APT keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download official Docker GPG key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add official Docker APT repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ docker_arch }} signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu
+      {{ ansible_facts['distribution_release'] }} stable
+    filename: docker
+    state: present
+    update_cache: true
+
+- name: Install official Docker Engine CE and Compose v2 plugin
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Docker systemd service is started and enabled on boot
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true

@@ -1,0 +1,44 @@
+---
+- name: Provision NVIDIA GPU Server and Deploy LLM Inference Stack
+  hosts: gpu_nodes
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../group_vars/all.yml
+
+  roles:
+    - role: common
+      tags:
+        - common
+        - base
+        - firewall
+
+    - role: docker
+      tags:
+        - docker
+        - runtime
+
+    - role: nvidia_gpu
+      tags:
+        - nvidia
+        - gpu
+        - drivers
+
+    - role: llm_engine
+      tags:
+        - llm
+        - ollama
+        - model
+
+    - role: security_proxy
+      tags:
+        - security
+        - proxy
+        - nginx
+        - verify
+
+    - role: monitoring
+      tags:
+        - monitoring
+        - metrics
+        - prometheus

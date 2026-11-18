@@ -1,0 +1,6 @@
+---
+- name: Restart ollama stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ llm_stack_dir }}/ollama"
+    state: restarted
+  when: not ansible_check_mode

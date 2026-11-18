@@ -1,0 +1,59 @@
+---
+system_timezone: "UTC"
+
+common_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - jq
+  - lsb-release
+  - pciutils
+  - python3-pip
+  - software-properties-common
+  - ufw
+
+# Valid options: "auto" (detect via lspci), "enabled", "disabled"
+gpu_mode: "auto"
+has_nvidia_gpu: "{{ common_has_nvidia_gpu | default(false) | bool }}"
+
+nvidia_driver_branch: "550"
+nvidia_driver_package: "nvidia-driver-{{ nvidia_driver_branch }}-server"
+nvidia_reboot_timeout: 600
+
+docker_arch: "amd64"
+llm_stack_dir: "/opt/llm-stack"
+
+ollama_image: "ollama/ollama:latest"
+ollama_container_name: "ollama-engine"
+ollama_bind_address: "127.0.0.1"
+ollama_port: 11434
+ollama_keep_alive: "24h"
+
+llm_model_name: "qwen2.5:1.5b"
+llm_pull_timeout: 600
+
+ssh_port: 22
+
+api_gateway_image: "nginx:1.27-alpine"
+api_gateway_container_name: "llm-api-gateway"
+api_gateway_bind_address: "0.0.0.0"
+api_gateway_port: 80
+
+# Override in production via ansible-vault or -e "llm_api_key=..."
+llm_api_key: "sk-prod-gpu-llm-secret-token-2026"
+
+nginx_rate_limit: "10r/s"
+nginx_rate_limit_burst: 20
+nginx_proxy_read_timeout: "300s"
+
+monitoring_enabled: true
+monitoring_bind_address: "127.0.0.1"
+
+node_exporter_image: "prom/node-exporter:v1.8.2"
+node_exporter_container_name: "node-exporter"
+node_exporter_port: 9100
+
+dcgm_exporter_image: "nvcr.io/nvidia/k8s/dcgm-exporter:3.3.8-3.6.0-ubuntu22.04"
+dcgm_exporter_container_name: "dcgm-exporter"
+dcgm_exporter_port: 9400

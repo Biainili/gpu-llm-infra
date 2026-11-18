@@ -1,0 +1,89 @@
+---
+- name: Ensure Nginx API Gateway stack directory exists
+  ansible.builtin.file:
+    path: "{{ llm_stack_dir }}/security_proxy"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render Nginx API Gateway configuration
+  ansible.builtin.template:
+    src: nginx.conf.j2
+    dest: "{{ llm_stack_dir }}/security_proxy/nginx.conf"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart api gateway stack
+
+- name: Render Nginx API Gateway Docker Compose file
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ llm_stack_dir }}/security_proxy/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart api gateway stack
+
+- name: Deploy and start Nginx API Gateway container
+  community.docker.docker_compose_v2:
+    project_src: "{{ llm_stack_dir }}/security_proxy"
+    state: present
+  when: not ansible_check_mode
+
+- name: Flush handlers to apply Nginx configuration changes immediately
+  ansible.builtin.meta: flush_handlers
+
+- name: Execute End-to-End API Gateway and LLM Inference Smoke Tests
+  when: not ansible_check_mode
+  block:
+    - name: Verify public /health endpoint returns HTTP 200 OK
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ api_gateway_port }}/health"
+        method: GET
+        return_content: true
+        status_code: 200
+      register: security_proxy_health_check
+      until: security_proxy_health_check.status == 200
+      retries: 10
+      delay: 2
+      changed_when: false
+
+    - name: Verify unauthenticated API request is rejected with HTTP 401 Unauthorized
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ api_gateway_port }}/api/tags"
+        method: GET
+        return_content: true
+        status_code: 401
+      register: security_proxy_unauth_check
+      changed_when: false
+
+    - name: Verify authenticated OpenAI-compatible inference request succeeds (HTTP 200)
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ api_gateway_port }}/v1/chat/completions"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ llm_api_key }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          model: "{{ llm_model_name }}"
+          messages:
+            - role: "user"
+              content: "Reply with the single word: READY"
+          max_tokens: 16
+          temperature: 0.0
+        return_content: true
+        status_code: 200
+        timeout: 120
+      register: security_proxy_inference_check
+      changed_when: false
+
+    - name: Report End-to-End LLM Inference verification result
+      ansible.builtin.debug:
+        msg: >-
+          E2E Verification Passed!
+          Healthcheck: HTTP {{ security_proxy_health_check.status }} |
+          Unauthenticated Block: HTTP {{ security_proxy_unauth_check.status }} |
+          Authenticated LLM Response ({{ llm_model_name }}):
+          "{{ security_proxy_inference_check.json.choices[0].message.content | trim }}"

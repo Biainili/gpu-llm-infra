@@ -1,0 +1,12 @@
+---
+- name: Reboot server for nvidia driver
+  ansible.builtin.reboot:
+    msg: "Rebooting server to load newly installed NVIDIA kernel modules"
+    reboot_timeout: "{{ nvidia_reboot_timeout }}"
+    post_reboot_delay: 10
+
+- name: Restart docker for nvidia
+  ansible.builtin.systemd_service:
+    name: docker
+    state: restarted
+    daemon_reload: true

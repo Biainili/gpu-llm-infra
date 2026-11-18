@@ -1,0 +1,9 @@
+---
+services:
+  api_gateway:
+    image: {{ api_gateway_image }}
+    container_name: {{ api_gateway_container_name }}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro

@@ -1,0 +1,58 @@
+---
+- name: Ensure Ollama stack directory exists
+  ansible.builtin.file:
+    path: "{{ llm_stack_dir }}/ollama"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render Ollama Docker Compose configuration
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ llm_stack_dir }}/ollama/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart ollama stack
+
+- name: Deploy and start Ollama container stack
+  community.docker.docker_compose_v2:
+    project_src: "{{ llm_stack_dir }}/ollama"
+    state: present
+  when: not ansible_check_mode
+
+- name: Flush handlers to ensure Ollama is running latest configuration
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Ollama HTTP API to become ready and query installed models
+  ansible.builtin.uri:
+    url: "http://{{ ollama_bind_address }}:{{ ollama_port }}/api/tags"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: llm_engine_tags_response
+  until: llm_engine_tags_response.status == 200
+  retries: 20
+  delay: 3
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Pull target LLM model idempotently if not already present
+  ansible.builtin.uri:
+    url: "http://{{ ollama_bind_address }}:{{ ollama_port }}/api/pull"
+    method: POST
+    body_format: json
+    body:
+      name: "{{ llm_model_name }}"
+      stream: false
+    return_content: true
+    status_code: 200
+    timeout: "{{ llm_pull_timeout }}"
+  register: llm_engine_pull_response
+  changed_when: true
+  when:
+    - not ansible_check_mode
+    - >-
+      llm_model_name not in
+      (llm_engine_tags_response.json.models | default([]) | map(attribute='name') | list)
